@@ -24,7 +24,7 @@ C_FILES := $(call rwildcard, $(SRC_DIR), *.c)
 OBJ_FILES = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(C_FILES))
 
 C_FLAGS += --std=gnu99 -flto -O3 -pipe -march=native -I$(PROJECT_DIR)headers
-CC = mpicc
+CC = /usr/bin/mpicc
 
 main: $(SRC_DIR)/main.c $(OBJ_DIR)/matrix.o
 	$(call CHK_DIR_EXISTS, $(BIN_DIR))
