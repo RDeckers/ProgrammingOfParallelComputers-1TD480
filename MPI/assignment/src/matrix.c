@@ -9,7 +9,7 @@
 void new_random_matrix(double **A, unsigned N){
   *A = malloc(N*N*sizeof(double));//Allign to cachelines instead.
   for(unsigned n = 0; n < N*N; n++){
-    (*A)[n] = rand() / ((double) RAND_MAX);
+    (*A)[n] = n;//rand() / ((double) RAND_MAX);
   }
 }
 
@@ -20,19 +20,19 @@ void new_matrix(double **A, unsigned N){
 void print_matrix(double *A, unsigned n){
   for(unsigned y = 0; y < n; y++){
     for(unsigned x = 0; x < n; x++)
-      printf("%1.2f ", A[y*n+x]);
+      printf("%3.0f ", A[y*n+x]);
     puts("");
   }
 }
 
-void MxM_square_scalar(double* A, double* B, double* C, unsigned N){
+void MxM_fma_square_scalar(double* A, double* B, double* C, unsigned N){
   for (int yA = 0; yA < N; yA++) {
     for (int xB = 0; xB < N; xB++) {
       double tmp = 0.0;
       for (int loop = 0; loop < N; loop++) {
         tmp += A[yA*N+loop] * B[xB+N*loop];
       }
-      C[yA*N+xB] = tmp;
+      C[yA*N+xB] += tmp;
     }
   }
 }
