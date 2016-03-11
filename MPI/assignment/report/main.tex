@@ -1,0 +1,64 @@
+%& -job-name=Assignment5
+\input{./preamble.tex}
+\graphicspath{./plots}
+\begin{document}
+  \maketitle[Programming of Parallel Computers]{Compulsory Assignment 1}
+{
+  \em
+  This report discusses how to utilize Fox's algorithm to multiply dense matrices using MPI. The program is analyzed running both
+  on a single 4-core local machine and on a cluster of servers consisting of 3 dual-socket servers, each with 16 cores per socket for
+  a total of 96 cores. We only consider the case where the amount of proccesses is square and divides easilly into the matrix size $N$.
+}
+  \section{Problem Specification}
+   \par Matrix-Matrix multiplication ($A\cdot B = C$)is a common but computationally expensive problem which
+   can be easilly decomposed into parallel tasks. In order to speed up calculations it is possible to distribute the computation
+   over several machines using (in this case) MPI. However in doing so one has to take care in distributing the memory
+   in a correct and efficient manner between the various hosts. One such method is described by Fox's Algorithm which has
+   been implemented for this report.
+   \par Fox's algorithm works by processing the matrix on a Cartesian grid of processor in several stages. First, assume $p$ processors
+   then a cartesian grid will be $\sqrt{p}\times\sqrt{p}$, then divide all matrices into block matrices of block sizes $N/\sqrt{p}$.
+   at each stage $s$ a processor will multiply and the $s$'th off-diagonal block of $A$ on its own row, by the corresponding block of $B$ in its own column and add the resulting block matrix to it's local result.
+   After $N/\sqrt{p}$ stages, all local results are send back to one the processors (usually chosen to be the one which has rank $0$ in MPI lingo)
+   which then constructs the final answer $C$.
+   \par Communication is efficient as one only needs small parts of $B$ and $A$ at once. at each stage the $s$'th off-diagonal element is broadcasted in the row,
+   and the next block of $B$ can be obtained from the neighbouring processor (below). But these operations, after the initial distribution, can be made non-blocking and
+   overlapped with the computation of the block matrix-matrix product, which scales worse then the cost of communication for large $N$ and can therefore be used to hide the costs.
+ \section{Implementation}
+  \par The implementation presented in the accompanying source-code first distributes the corresponding block of $A$ and $B$ to each processor on the grid using a
+  newly defined block matrix type and vscatter method.
+  at the correct stage a processor will broadcast it's element of $A$ to all processors in it's row using a non-blocking broadcast. the values of $B$ are cyclically shifted in columnwise fashion using non-blocking
+   send and recieve calls. Two buffers are used for the blocks of both $A$ and $B$ to facilitate simultanious recieving and computation, and another buffer is used to store the element of $A$ that we will need to broadcast.
+   together with the local buffer this brings the totally memory usage for each node to roughly 6 block matrices.
+   \par More information is given in the comments of the accompanying source-code.
+   \newpage
+  \section{Results}
+  \begin{figure}[!Hhp]
+    \centering
+    \input{plots/local}
+    \caption{The resulting speedup for various values of $p$ on a single machine.}
+  \end{figure}
+  \begin{figure}[!Hhp]
+    \centering
+    \input{plots/distributed}
+    \caption{The resulting speedup for various values of $p$ on a cluster of machines. The vertical line indicates a multiple of 16 proccesses.}
+  \end{figure}
+
+  \section{Discussion}
+  As we can see from the figures, significant speedups can be obtained by using MPI, although not perfectlly linear,
+  the best results are obtained for large values of $N$. this can be explained by the scaling of naive matrix-matrix multiplication which is $\O(n^3)$ and therefore
+  scales worse then the increased bandwith costs (which are $\O(n^2)$). After a certain number of proccesses $p$ the speedup declines however. In the local case this
+  is easilly attributable to saturation of the cpu. In the clustered case however this is unexpected. As the maximum speed-up is obtained for roughly the amount of cores on the local machine, meanng that
+  any use of the cluster has a negative impact. This can likely be attributed to a slow interconnection
+   between the servers, in this case it may be attributable to the rate-limiting of the shared servers
+   (which were in heavy use and have be observed to be quite slow when
+    talking to the network\footnote{While unpacking a large tarball for another course,
+    we noted that it run at about 1 text file per second which is incrediblly slow.
+    As our storage is networked this may be indicative of the bandwith allotment.}.)
+    \par Alternatively, this can occur when one of the servers is much slower than the others
+    stalling the process at any synchronization point, however all servers share the same specifications\footnote{although one was constantly running at full-load, we put this server at the end of the nodes file however.}.
+
+\section{Conclusion}
+In conclusion MPI offers a way to easilly distribute work over a cluster of machines as well locally. The significant cost in communcation between machines and the the non-shared memory however means that special
+algorithms have to be designed with care when implementing. As we have noted, it is possible that the cost in communcation and overhead can dominate the time taken, losing any benefit.
+
+\end{document}
