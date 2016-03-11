@@ -40,12 +40,6 @@ unsigned bounded_field_run(
   const stopping_criterion_t *stopping_criterion
 );
 
-unsigned bounded_field_run_naive(
-  bounded_field_t *bounded_field,
-  double omega,
-  const stopping_criterion_t *stopping_criterion
-);
-
 void bounded_field_copy_edges(bounded_field_t *bounded_field);
 
 double bounded_field_update(
@@ -53,10 +47,6 @@ double bounded_field_update(
   double omega
 );
 
-double bounded_field_update_naive(
-  bounded_field_t *bounded_field,
-  double omega
-);
 
 double bounded_field_at_index(
   bounded_field_t *bounded_field,
@@ -79,7 +69,7 @@ double bounded_field_f_at_index(
   int x,
   int y
 );
-double bounded_field_f_at_index_naive(
+double bounded_field_eval_f_at_index(
   bounded_field_t *bounded_field,
   int x,
   int y
@@ -87,16 +77,8 @@ double bounded_field_f_at_index_naive(
 
 double bounded_field_dx(bounded_field_t* bounded_field);
 double bounded_field_dy(bounded_field_t* bounded_field);
-double bounded_field_dx_naive(bounded_field_t* bounded_field);
-double bounded_field_dy_naive(bounded_field_t* bounded_field);
 
 double bounded_field_laplacian_at_index(
-  bounded_field_t* bounded_field,
-  int x,
-  int y
-);
-
-double bounded_field_laplacian_at_index_naive(
   bounded_field_t* bounded_field,
   int x,
   int y
@@ -116,20 +98,6 @@ double bounded_field_residual_at_index(
 );
 
 double bounded_field_residual_L2_norm(bounded_field_t *bounded_field);
-double bounded_field_update_point_naive(
-  bounded_field_t *bounded_field,
-  int x,
-  int y,
-  double omega
-);
-
-double bounded_field_residual_at_index_naive(
-  bounded_field_t *bounded_field,
-  int x,
-  int y
-);
-
-double bounded_field_residual_L2_norm_naive(bounded_field_t *bounded_field);
 
 void bounded_field_print(bounded_field_t *bounded_field);
 void bounded_field_print_interior(bounded_field_t *bounded_field);
