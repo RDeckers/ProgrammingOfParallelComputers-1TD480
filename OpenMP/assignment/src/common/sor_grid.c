@@ -50,7 +50,7 @@ int bounded_field_initialize(
   }
   for(unsigned y = 0; y < ny; y++){
     for(unsigned x = 0; x < nx; x++){
-      bounded_field->f_field[y*nx+x] = bounded_field_f_at_index_naive(bounded_field, x, y);
+      bounded_field->f_field[y*nx+x] = bounded_field_eval_f_at_index(bounded_field, x, y);
     }
   }
   return 1;
@@ -70,89 +70,42 @@ void bounded_field_copy_edges(bounded_field_t *bounded_field){
   }
 }
 
-double bounded_field_update_naive(bounded_field_t *bounded_field, double omega){
+inline double bounded_field_update(bounded_field_t *bounded_field, double omega){
   int nx = bounded_field->nx;
   int ny = bounded_field->ny;
   //red loop
-  double sum = 0;
-  #pragma omp parallel for
-  for(int y = 0; y < ny; y ++){
-    for(int x = y&1; x < nx; x += 2){
-      sum += bounded_field_update_point_naive(bounded_field, x, y, omega);
+  double total_sum;
+  #pragma omp parallel
+  {
+    #pragma omp reduction(+:total_sum)
+    {
+      double sum = 0;
+      #pragma omp for
+      for(int y = 0; y < ny; y ++){
+        for(int x = y&1; x < nx; x += 2){
+          sum += bounded_field_update_point(bounded_field, x, y, omega);
+        }
+      }
+      //black loop
+      #pragma omp for schedule(static) //16 doubles in a cache-line, so this touches 2 cha
+      for(int y = 0; y < ny; y ++){
+        for(int x = !(y&1); x < nx; x += 2){
+          sum += bounded_field_update_point(bounded_field, x, y, omega);
+        }
+      }
+      total_sum += sum;
     }
-  }
-  //black loop
-  #pragma omp parallel for
-  for(int y = 0; y < ny; y ++){
-    for(int x = !(y&1); x < nx; x += 2){
-      sum += bounded_field_update_point_naive(bounded_field, x, y, omega);
-    }
-  }
-  double avg = sum / (nx*ny);
-  #pragma omp parallel for
-  for(int y = 0; y < ny; y++){
-    for(int x = 0; x < nx; x++){
-      double old_value = bounded_field_at_index(bounded_field, x, y);
-      double new_value = old_value - avg;
-      bounded_field_set_at_index(bounded_field, new_value, x, y);
-    }
-  }
-  bounded_field_copy_edges(bounded_field);
-}
-
-double bounded_field_update(bounded_field_t *bounded_field, double omega){
-  int nx = bounded_field->nx;
-  int ny = bounded_field->ny;
-  //red loop
-  double sum = 0;
-  #pragma omp parallel for
-  for(int y = 0; y < ny; y ++){
-    for(int x = y&1; x < nx; x += 2){
-      sum += bounded_field_update_point(bounded_field, x, y, omega);
-    }
-  }
-  //black loop
-  #pragma omp parallel for
-  for(int y = 0; y < ny; y ++){
-    for(int x = !(y&1); x < nx; x += 2){
-      sum += bounded_field_update_point(bounded_field, x, y, omega);
-    }
-  }
-  double avg = sum / (nx*ny);
-  #pragma omp parallel for
-  for(int y = 0; y < ny; y++){
-    for(int x = 0; x < nx; x++){
-      double old_value = bounded_field_at_index(bounded_field, x, y);
-      double new_value = old_value - avg;
-      bounded_field_set_at_index(bounded_field, new_value, x, y);
+    double avg = total_sum / (nx*ny);
+    #pragma omp for schedule(static)
+    for(int y = 0; y < ny; y++){
+      for(int x = 0; x < nx; x++){
+        double old_value = bounded_field_at_index(bounded_field, x, y);
+        double new_value = old_value - avg;
+        bounded_field_set_at_index(bounded_field, new_value, x, y);
+      }
     }
   }
   bounded_field_copy_edges(bounded_field);
-}
-
-unsigned bounded_field_run_naive(
-  bounded_field_t *bounded_field,
-  double omega,
-  const stopping_criterion_t *stopping_criterion
-){
-  if(!stopping_criterion){
-    stopping_criterion = &DEFAULT_STOPPING_CRITERION;
-  }
-  double min_relative_change = stopping_criterion->minimum_residual_ratio;
-  double residual = stopping_criterion->tolerance;
-  unsigned max_iterations = stopping_criterion->max_iterations;
-  unsigned iterations;
-
-  bounded_field_copy_edges(bounded_field);
-  double residual_norm = bounded_field_residual_L2_norm_naive(bounded_field);
-  double relative_change = 2*min_relative_change;
-  for(iterations = 0; (residual_norm >= residual) && (relative_change >= min_relative_change) && (iterations < max_iterations); iterations++){
-    bounded_field_update_naive(bounded_field, omega);
-    double new_residual_norm = bounded_field_residual_L2_norm_naive(bounded_field);
-    double relative_change = residual_norm/new_residual_norm;
-    residual_norm = new_residual_norm;
-  }
-  return iterations;
 }
 
 unsigned bounded_field_run(
@@ -198,7 +151,7 @@ inline double bounded_field_index_to_coord_y(bounded_field_t *bounded_field, int
   return bounded_field->y0+bounded_field_dx(bounded_field)*y;
 }
 
-inline double bounded_field_f_at_index_naive(bounded_field_t *bounded_field, int x, int y){
+inline double bounded_field_eval_f_at_index(bounded_field_t *bounded_field, int x, int y){
   return bounded_field->f(
     bounded_field_index_to_coord_x(bounded_field,x),
     bounded_field_index_to_coord_y(bounded_field, y)
@@ -217,24 +170,6 @@ inline double bounded_field_dy(bounded_field_t* bounded_field){
   return bounded_field->dy;
 }
 
-inline double bounded_field_dx_naive(bounded_field_t* bounded_field){
-  return (bounded_field->x1-bounded_field->x0)/bounded_field->nx;
-}
-
-inline double bounded_field_dy_naive(bounded_field_t* bounded_field){
-  return (bounded_field->y1-bounded_field->y0)/bounded_field->ny;
-}
-
-inline double bounded_field_laplacian_at_index_naive(bounded_field_t* bounded_field, int x, int y){
-  double field_n = bounded_field_at_index(bounded_field,x,y+1);
-  double field_e = bounded_field_at_index(bounded_field,x+1,y);
-  double field_s = bounded_field_at_index(bounded_field,x,y-1);
-  double field_w = bounded_field_at_index(bounded_field,x-1,y);
-  double dx = bounded_field_dx_naive(bounded_field);
-  double dy = bounded_field_dy_naive(bounded_field);
-  return (field_n+field_s)/(dy*dy)+(field_e+field_w)/(dx*dx);
-}
-
 inline double bounded_field_laplacian_at_index(bounded_field_t* bounded_field, int x, int y){
   double field_n = bounded_field_at_index(bounded_field,x,y+1);
   double field_e = bounded_field_at_index(bounded_field,x+1,y);
@@ -243,18 +178,6 @@ inline double bounded_field_laplacian_at_index(bounded_field_t* bounded_field, i
   double dx = bounded_field_dx(bounded_field);
   double dy = bounded_field_dy(bounded_field);
   return (field_n+field_s)/(dy*dy)+(field_e+field_w)/(dx*dx);
-}
-
-double bounded_field_update_point_naive(bounded_field_t *bounded_field, int x, int y, double omega){
-  double field_here = bounded_field_at_index(bounded_field,x,y);
-  double old_term = (1-omega)*field_here;
-  double dx = bounded_field_dx_naive(bounded_field);
-  double dy = bounded_field_dy_naive(bounded_field);
-  double laplacian = bounded_field_laplacian_at_index(bounded_field, x, y);
-  double f = bounded_field_f_at_index_naive(bounded_field, x, y);
-  double new_term = omega/(2/(dx*dx)+2/(dy*dy))*(laplacian-f);
-  bounded_field_set_at_index(bounded_field, old_term+new_term, x, y);
-  return old_term+new_term;
 }
 
 double bounded_field_update_point(bounded_field_t *bounded_field, int x, int y, double omega){
@@ -269,16 +192,6 @@ double bounded_field_update_point(bounded_field_t *bounded_field, int x, int y, 
   return old_term+new_term;
 }
 
-double bounded_field_residual_at_index_naive(bounded_field_t *bounded_field, int x, int y){
-  double laplacian = bounded_field_laplacian_at_index_naive(bounded_field, x, y);
-  double f = bounded_field_f_at_index_naive(bounded_field, x, y);
-  double here = bounded_field_at_index(bounded_field, x, y);
-  double dx = bounded_field_dx_naive(bounded_field);
-  double dy = bounded_field_dy_naive(bounded_field);
-  return f-(laplacian-2*here*(1/(dx*dx)+1/(dy*dy)));
-}
-
-
 double bounded_field_residual_at_index(bounded_field_t *bounded_field, int x, int y){
   double laplacian = bounded_field_laplacian_at_index(bounded_field, x, y);
   double f = bounded_field_f_at_index(bounded_field, x, y);
@@ -287,20 +200,6 @@ double bounded_field_residual_at_index(bounded_field_t *bounded_field, int x, in
   double dy = bounded_field_dy(bounded_field);
   return f-(laplacian-2*here*(1/(dx*dx)+1/(dy*dy)));
 }
-
-double bounded_field_residual_L2_norm_naive(bounded_field_t *bounded_field){
-  int nx = bounded_field->nx;
-  int ny = bounded_field->ny;
-  double residual_sum = 0;
-  for(int y = 0; y < ny; y++){
-    for(int x = 0; x < nx; x++){
-      double residual = bounded_field_residual_at_index_naive(bounded_field, x, y);
-      residual_sum += residual*residual;
-    }
-  }
-  return sqrt(residual_sum/(nx*ny));
-}
-
 
 double bounded_field_residual_L2_norm(bounded_field_t *bounded_field){
   int nx = bounded_field->nx;
