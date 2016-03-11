@@ -20,13 +20,17 @@ OBJ_DIR := $(PROJECT_DIR)obj
 BIN_DIR := $(PROJECT_DIR)bin
 SRC_DIR := $(PROJECT_DIR)src
 EXAMPLE_DIR := $(PROJECT_DIR)examples
+PLOTS_DIR := $(PROJECT_DIR)plots
+
+PLOTS_GNUPLOT := $(call rwildcard, $(PLOTS_DIR), *.gnuplot)
+PLOTS_PNG := $(patsubst %.gnuplot, %.png, $(PLOTS_GNUPLOT))
 
 C_FILES := $(call rwildcard, $(SRC_DIR), *.c)
 COMMON_C_FILES := $(call rwildcard, $(SRC_DIR)/common/, *.c)
 COMMON_OBJ := $(patsubst $(SRC_DIR)/common/%.c,$(OBJ_DIR)/%.o,$(COMMON_C_FILES))
 BINARIES := $(patsubst $(SRC_DIR)/%.c,$(BIN_DIR)/%,$(wildcard $(SRC_DIR)/*.c))
 
-C_FLAGS += --std=gnu99 -O2 -pipe -march=native -lpthread -lmultiX -lutilities -lrt -I$(PROJECT_DIR)headers
+C_FLAGS += --std=gnu99 -O2 -pipe -march=native -pthread -lmultiX -lutilities -lrt -I$(PROJECT_DIR)headers
 
 all: binaries
 
@@ -42,6 +46,17 @@ $(BIN_DIR)/% : $(SRC_DIR)/%.c $(COMMON_OBJ)
 	$(call CHK_DIR_EXISTS, $(BIN_DIR))
 	gcc $(C_FLAGS) -o $@ $< $(COMMON_OBJ)
 
+plots : $(PLOTS_PNG)
+
+report: plots
+	pdflatex -interaction=nonstopmode $(PROJECT_DIR)report.tex
+
+$(PLOTS_DIR)/%.png : $(PLOTS_DIR)/%.gnuplot
+	$(call REPORT,Making plot $@)
+	gnuplot -e "output_file='$@';term_type='png'" -c "$(patsubst %.png,%.gnuplot,$@)"
+
 clean:
 	$(call REPORT,Cleaning...)
 	-$(NUKE) "$(BIN_DIR)" "$(OBJ_DIR)"
+	-$(NUKE) "$(PLOTS_PNG)"
+	-$(NUKE) "$(PROJECT_DIR)/*.pdf"

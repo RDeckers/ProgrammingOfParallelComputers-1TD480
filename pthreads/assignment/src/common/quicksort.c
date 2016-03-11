@@ -1,7 +1,9 @@
 #include <quicksort.h>
 #include <pthread.h>
+#include <sched.h>
 #include <utilities/logging.h>
 #include <multiX.h>
+#include <float.h>
 
 //returns the median of the middle, start and end of the array.
 //Measured to perform slightly better thank taking just the middle with random data for small arrays.
@@ -160,5 +162,72 @@ void actual_quicksort_w_fork(double *array, int N, int depth){
     //report(PASS, "not forking on N = %d and depth = %d", N, depth);
     quicksort(smallest, small_size);
     quicksort(largest, large_size);
+  }
+}
+
+struct quicksort_peer_args{
+  double* array;
+  int N;
+  int n_threads;
+  unsigned id;
+  volatile int *threads_done_making_bins;
+};
+
+void* peer_function(void* args){
+  struct quicksort_peer_args *casted_args = args;
+  int thread_id = casted_args->id;
+  //report(FAIL, "my id = %d", thread_id);
+  int n_threads = casted_args->n_threads;
+  int N = casted_args->N;
+  double *array = casted_args->array;
+  double x0 = thread_id/((double)n_threads);
+  double x1 = (thread_id+1)/((double)n_threads);
+  if(thread_id == n_threads -1){
+    double x1 = DBL_MAX;
+  }
+  size_t bin_capacity = 2*N/n_threads;
+  double *bins = malloc(bin_capacity*sizeof(double));
+  unsigned bin_size = 0;
+  unsigned starting_point = 0; //how many bins less than our x0 is were we start writting our output.
+  for(unsigned u = 0; u < N; u++){
+    if((x0 <= array[u]) && (x1 > array[u])){
+      if(bin_size == bin_capacity){
+        bin_capacity *=2;
+        bins = realloc(bins, bin_capacity*sizeof(double));
+      }
+      bins[bin_size++] = array[u];
+    }
+    else if(x0 >  array[u]){
+      starting_point++;
+    }
+  }
+  __sync_fetch_and_add(casted_args->threads_done_making_bins, 1); //sync point
+  //report(INFO, "Sorting %d elements between %f and %f", bin_size, x0, x1);
+  quicksort(bins, bin_size);
+  while(n_threads != *(casted_args->threads_done_making_bins)){
+    sched_yield();//spinlock untill all threads are done reading the initial data.
+  }
+  for(unsigned u = 0; u < bin_size; u++){
+    array[starting_point+u] = bins[u];
+  }
+  free(bins);
+}
+
+void quicksort_w_peers(double* array, unsigned N, const unsigned thread_count){
+  int done_making_bins = 0;
+  pthread_t threads[thread_count];
+  struct quicksort_peer_args args[thread_count];
+  for(unsigned u = 0; u < thread_count; u++){
+    args[u].n_threads = thread_count;
+    args[u].id = u;
+    args[u].array = array;
+    args[u].N = N;
+    args[u].threads_done_making_bins = &done_making_bins;
+    //report(INFO, "creating thread %d", u);
+    pthread_create(threads+u, NULL, &peer_function, &args[u]);
+  }
+  for(unsigned u = 0; u < thread_count; u++){
+    pthread_join(threads[u], NULL);
+    //report(PASS, "Joined thread %d", u);
   }
 }
