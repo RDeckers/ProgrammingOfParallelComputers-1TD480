@@ -74,13 +74,10 @@ inline double bounded_field_update(bounded_field_t *bounded_field, double omega)
   int nx = bounded_field->nx;
   int ny = bounded_field->ny;
   //red loop
-  double total_sum;
+  double sum = 0;
   #pragma omp parallel
   {
-    #pragma omp reduction(+:total_sum)
-    {
-      double sum = 0;
-      #pragma omp for
+      #pragma omp for schedule(static) reduction(+:sum)
       for(int y = 0; y < ny; y ++){
         for(int x = y&1; x < nx; x += 2){
           sum += bounded_field_update_point(bounded_field, x, y, omega);
@@ -93,9 +90,7 @@ inline double bounded_field_update(bounded_field_t *bounded_field, double omega)
           sum += bounded_field_update_point(bounded_field, x, y, omega);
         }
       }
-      total_sum += sum;
-    }
-    double avg = total_sum / (nx*ny);
+    double avg = sum / (nx*ny);
     #pragma omp for schedule(static)
     for(int y = 0; y < ny; y++){
       for(int x = 0; x < nx; x++){
@@ -201,15 +196,20 @@ double bounded_field_residual_at_index(bounded_field_t *bounded_field, int x, in
   return f-(laplacian-2*here*(1/(dx*dx)+1/(dy*dy)));
 }
 
-double bounded_field_residual_L2_norm(bounded_field_t *bounded_field){
+inline double bounded_field_residual_L2_norm(bounded_field_t *bounded_field){
   int nx = bounded_field->nx;
   int ny = bounded_field->ny;
   double residual_sum = 0;
-  for(int y = 0; y < ny; y++){
-    for(int x = 0; x < nx; x++){
-      double residual = bounded_field_residual_at_index(bounded_field, x, y);
-      residual_sum += residual*residual;
-    }
+  #pragma omp parallel
+  {
+      double local_sum = 0.0;
+      #pragma omp for schedule(static) reduction(+:residual_sum)
+      for(int y = 0; y < ny; y++){
+        for(int x = 0; x < nx; x++){
+          double residual = bounded_field_residual_at_index(bounded_field, x, y);
+          residual_sum += residual*residual;
+        }
+      }
   }
   return sqrt(residual_sum/(nx*ny));
 }
