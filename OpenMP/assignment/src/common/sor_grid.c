@@ -139,11 +139,11 @@ inline double bounded_field_at_index(bounded_field_t *bounded_field, int x, int 
 }
 
 inline double bounded_field_index_to_coord_x(bounded_field_t *bounded_field, int x){
-  return bounded_field->x0+bounded_field_dx(bounded_field)*x;
+  return bounded_field->x0+bounded_field_dx(bounded_field)*(x+0.5);
 }
 
 inline double bounded_field_index_to_coord_y(bounded_field_t *bounded_field, int y){
-  return bounded_field->y0+bounded_field_dx(bounded_field)*y;
+  return bounded_field->y0+bounded_field_dx(bounded_field)*(y+0.5);
 }
 
 inline double bounded_field_eval_f_at_index(bounded_field_t *bounded_field, int x, int y){

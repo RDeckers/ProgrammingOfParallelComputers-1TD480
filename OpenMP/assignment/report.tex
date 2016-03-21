@@ -1,0 +1,60 @@
+\input{./preamble.tex}
+\begin{document}
+  \maketitle[Programming of Parallel Computers]{OpenMP}
+\section{Task 1}
+  \begin{figure}[h!]
+    \centering
+      \includegraphics[width=0.7\textwidth]{plots/task_01.png}
+    \caption{A simple print of an intial field.}
+    \label{fig:task01}
+  \end{figure}
+
+  \begin{figure}[h!]
+    \centering
+      \includegraphics[width=0.7\textwidth]{plots/compute_result}
+    \caption{A solution for $f(x,y) = \sin(\2\pi x)$ on a $64\times 64$ grid.}
+    \label{fig:solution}
+  \end{figure}
+
+\section{Task 2}
+\begin{figure}[h!]
+  \centering
+    \includegraphics[width=0.7\textwidth]{plots/varying_omega.png}
+  \caption{The residual as a function of the iteration count for several values of $\omega$.}
+  \label{fig:varying_omega}
+\end{figure}
+
+\begin{figure}[h!]
+  \centering
+    \includegraphics[width=0.7\textwidth]{plots/omega_field.png}
+  \caption{The residual as a function of the iteration count for several values of $\omega$ in a contour plot.}
+  \label{fig:omega_field}
+\end{figure}
+
+ Looking at figure \ref{fig:omega_field} and \ref{fig:varying_omega} we can see that surprisingly smaller values of $\omega$ perform better.
+ Small values of $\omega$ correspond to reducing the effect of overshooting so that is most likely what is happening here.\footnote{or we have a bug somewhere.}
+ Still, looking at figure \ref{fig:varying_omega} we can clearly see that higher values of $\omega$ (around 1.5) initial descend steeper, so the best moethod would probably be to
+ use a heuristic which gradually reduces $\omega$ as the slope of the residual curve flattens out. In any case, the tolerance of $10^{-12}$ as shown in the assignment's flowchart seems to be
+ rather optimistic.
+
+\section{Task 3}
+I have parallelized the solver at three points in the code. First, at the red and black loops for updating the points, and secondly when calculating the L2-norm of the residual, and third when
+subtracting the mean from each point.
+ The speedup as a function of the threads are plotted in figure \ref{fig:threads}.
+ The results are somewhat lackluster. This could be due to the way the code is written.
+  Wile most functions are inlined into the main "run" function it may still fork/join too
+  often to get enough speed-up, manually inlining all the functions into a single parallel block does perform somewhat better, supporting this hypothesis. A solution might be to do multiple red-black iterations at a time
+however these will still need to sync in between runs. False sharing was looked into but the static scheduler should split the work in equal sized continous chunks reducing it as much as reasonably possible.
+\par We might also have been too impatient and not used a large enough grid size to see the real benefits. :)
+\begin{figure}[h!]
+  \centering
+    \includegraphics[width=0.7\textwidth]{plots/threading_speedup.png}
+  \caption{The speedup of our algorithm for various maximum thread counts.}
+  \label{fig:threads}
+\end{figure}
+
+\section{Thoughts on OpenMP}
+OpenMP looks like an effective way of quickly getting a large speed-up for little work. The compiler oriented structure should also lead itself to highly optimized vendor implementations (Intel has its own runtime implementation it seems).
+However, as we have noticed in Task 3 it can lead to large blocks of code if one wants to reduce the overhead of fork-joining negating some of the readability benefits over other methods of parallelizing.
+The lack of more fine-grained control can also make it less efficient both in work-time and run-time I suspect if the problems become more complex (such as recursive heuristic based tasks or heavilly data-layout optimized code).
+\end{document}

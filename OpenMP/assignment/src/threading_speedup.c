@@ -14,10 +14,11 @@ double sin_field(double x, double y){
 }
 
 int main(int argc, char** argv){
+  REPORT_TIMESTAMP = 1;
   bounded_field_t bounded_field;
-  for(unsigned n_threads = 1; n_threads <= 128; n_threads*=2){
+  for(unsigned n_threads = 1; n_threads <= 32; n_threads*=2){
     srand48(0);
-    bounded_field_initialize(&bounded_field, 128, 128, 0,1, 0,1, sin_field, random_init);
+    bounded_field_initialize(&bounded_field, 200, 200, 0,1, 0,1, sin_field, random_init);
     omp_set_num_threads(n_threads);
     struct timespec T;
     tick(&T);

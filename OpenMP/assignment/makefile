@@ -45,6 +45,9 @@ data : $(DATA_FILES)
 
 plots : $(PLOTS_PNG)
 
+report: plots report.tex
+	pdflatex -interaction=nonstopmode $(PROJECT_DIR)report.tex
+
 $(PLOTS_DIR)/%.png : $(DATA_DIR)/%.dat $(PLOTS_DIR)/%.gnuplot
 	$(call REPORT,Building $@)
 	gnuplot -e "output_file='$@';term_type='png'" -c "$(patsubst %.png,%.gnuplot,$@)"
