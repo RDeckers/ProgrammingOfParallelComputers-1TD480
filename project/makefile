@@ -29,11 +29,15 @@ endif
 PROJECT_DIR :=$(dir $(realpath $(lastword $(MAKEFILE_LIST))))
 OBJ_DIR := $(PROJECT_DIR)obj
 BIN_DIR := $(PROJECT_DIR)bin
-EXAMPLE_BIN_DIR := $(BIN_DIR)/examples
-SRC_DIR := $(PROJECT_DIR)src
-EXAMPLE_DIR := $(PROJECT_DIR)/examples
+SRC_DIR := $(PROJECT_DIR)/src
+SCRIPT_DIR := $(PROJECT_DIR)/scripts
+PLOTS_DIR := $(PROJECT_DIR)/plots
+DATA_DIR := $(PROJECT_DIR)/data
 
+PLOTS_GNUPLOT := $(call rwildcard, $(PLOTS_DIR), *.gnuplot)
+PLOTS_PNG := $(patsubst %.gnuplot, %.png, $(PLOTS_GNUPLOT))
 C_FILES := $(wildcard $(SRC_DIR)/*.c)
+SCRIPTS := $(wildcard $(SCRIPT_DIR)/*.sh)
 BINARIES := $(patsubst $(SRC_DIR)/%.c,$(BIN_DIR)/%,$(C_FILES))
 
 COMMON_C_FILES := $(wildcard $(SRC_DIR)/common/*.c)
@@ -42,10 +46,18 @@ OBJ_FILES = $(patsubst $(SRC_DIR)/common/%.c,$(OBJ_DIR)/%.o,$(COMMON_C_FILES))
 LD_FLAGS += --std=gnu99 -march=native -lOpenCL -lclu -lutilities -L$(INSTALL_LIB_DIR)
 C_FLAGS += --std=gnu99 -O2 -pipe -march=native -I$(PROJECT_DIR)headers -I$(INSTALL_INCLUDE_DIR)
 
-all : binaries
+.SECONDARY: $(OBJ_FILES)
+
+all : binaries plots
 	$(call REPORT, $(C_FILES))
 
 binaries: $(BINARIES)
+
+plots: $(PLOTS_PNG)
+
+$(PLOTS_DIR)/%.png : $(DATA_DIR)/%.dat $(PLOTS_DIR)/%.gnuplot
+	$(call REPORT,Building $@)
+	gnuplot -e "output_file='$@';term_type='png'" -c "$(patsubst %.png,%.gnuplot,$@)"
 
 $(BIN_DIR)% : $(SRC_DIR)/%.c $(OBJ_FILES)
 	$(call REPORT,Building $@)
