@@ -15,6 +15,7 @@ int main(int argc, char **argv){
   int null_kernel = 0;
   int size = 1 << 7;
   size_t n_loops = 1 << 12;
+  size_t avg_loops = 10;
   cl_float B = 0.0;
   cl_float coupling = 0.2237;
   srand(time(NULL));
@@ -230,6 +231,9 @@ int main(int argc, char **argv){
       return -1;
     }
     struct timespec T;
+    double time_taken = 0;
+    double avg_E = 0;
+    for(unsigned w = 0; w < avg_loops; w++){
     tick(&T);
     fill_rng(rng_field_a, dimensions[0]*dimensions[1]/2); //TODO: smaller rng needed
     //upload rng[0]
@@ -297,7 +301,7 @@ int main(int argc, char **argv){
 /*/////////////////////////////////////////////////
 //  END EXECUTION                               //
 ///////////////////////////////////////////////*/
-double time_taken = tock(&T);
+time_taken += tock(&T);
 if(CL_SUCCESS != (ret = clEnqueueNDRangeKernel(com_qs[0], kernels[2], 2, NULL, dimensions, work_item_dim, 0, NULL, NULL))){
   report(FAIL, "enqueue kernel[2] returned: %s (%d)",cluErrorString(ret), ret);
   return -4;
@@ -313,16 +317,10 @@ if(CL_SUCCESS != ret){
 double total_E = 0;
 for(int y = 0; y < dimensions[1]; y++){
   for(int x = 0; x < dimensions[0]; x++){
-    // printf("%1.4f ", spin_field[y*dimensions[0]+x]);
-    //printf("%s", spin_field[y*dimensions[0]+x] > 0? "\033[1;34mx\033[0m" : "\033[1;36mx\033[0m");
-    // printf("%c",
-    //  spin_field[y*dimensions[0]+x] == 4 ? '#' :
-    //  spin_field[y*dimensions[0]+x] == 3 ? 'X' :
-    //  spin_field[y*dimensions[0]+x] == 2 ? 'x' :
-    //  spin_field[y*dimensions[0]+x] == 1 ? '+' : ' ');
      total_E += spin_field[y*dimensions[0]+x];
   }
-  // puts("");
 }
-printf("%d %f %e %e\n", size, coupling, fabs(total_E)/(dimensions[0]*dimensions[1]), time_taken/n_loops);
+avg_E += total_E;
+}
+printf("%d %f %e %e\n", size, coupling, fabs(avg_E/avg_loops)/(dimensions[0]*dimensions[1]), time_taken/(avg_loops*n_loops));
 }

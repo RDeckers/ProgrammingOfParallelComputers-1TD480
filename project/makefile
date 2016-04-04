@@ -48,6 +48,12 @@ C_FLAGS += --std=gnu99 -O2 -pipe -march=native -I$(PROJECT_DIR)headers -I$(INSTA
 
 .SECONDARY: $(OBJ_FILES)
 
+all: report binaries
+
+report: plots
+	$(call REPORT, Making PDF)
+	pdflatex -interaction=nonstopmode $(PROJECT_DIR)main.tex
+
 all : binaries plots
 	$(call REPORT, $(C_FILES))
 
